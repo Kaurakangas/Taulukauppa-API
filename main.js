@@ -11,19 +11,38 @@ var HOST = "127.0.0.1";
 
 var APIException = api.APIException;
 
-app.all('/api', function(req, res){
-	var query = req.query;
+app.get('/api', function(req, res) {
+	res.redirect('/api/doc');
+});
+app.get('/api/doc', function(req, res) {
+	res.sendFile(__dirname + "/public/documentation.html");
+});
+app.all('/api/:target', function(req, res) {
+	console.log("HTTP:"+req.method.toUpperCase(), req.params, req.query);
+	var query = req.query,
+		params = req.params,
+		target = params.target,
+		method = req.method;
+	res.type('application/vnd.api+json');
 	try {
-		response = api.call(req.method, query);
-		res.send(response);
+		if (typeof query.method !== "undefined") method = query.method;
+
+		response = api.call(method.toUpperCase(), target.toLowerCase(), query);
+		res.send({
+			"query"   : query,
+			"response": response
+		});
 	} catch(e) {
 		if (e instanceof APIException) {
 			console.error("APIException while call:", e);
-			res.status(500).json(e);
+			res.status(e.httpstatus || 500).send(e);
 		} else {
 			console.error("Unindetified error while API call");
-			console.error({"ERROR":"Unindetified exception","Exception":e});
-			res.status(500).json({"ERROR":"Exception","Exception":e});
+			console.error({"ERROR":"Unindetified exception", "Exception":e});
+			res.status(e.httpstatus || 500).send({
+				ERROR: "Exception",
+				Exception: e
+			});
 		}
 	}	
 });

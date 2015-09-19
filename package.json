@@ -1,19 +1,22 @@
 {
-	"author"     : "Miro Nieminen <leonarven@gmail.com> (http://github.miron.fi/)",
-	"name"       : "Taulukauppa-API",
-	"version"    : "0.0.1",
-	"description": "API jolla hallita Taulukauppa-projektin teostietokantaa, taiteilijoita, gallerioita, jne.. Myös käyttäjätietokantaa.",
-	"homepage"   : "http://taulukauppa.planeetta.com/api/",
-	"main"       : "main.js",
-	"repository" : {
-		"type": "git",
-		"url": "git://github.com/Kaurakangas/Taulukauppa-API.git"
-	},
-	"contributors": [
-		{
-			"name" : "Miro Nieminen",
-			"email": "leonarven@gmail.com",
-			"web"  : "http://github.miron.fi/"
-		}
-	]
+  "author": "Miro Nieminen <leonarven@gmail.com> (http://github.miron.fi/)",
+  "name": "Taulukauppa-API",
+  "version": "0.0.1",
+  "description": "API jolla hallita Taulukauppa-projektin teostietokantaa, taiteilijoita, gallerioita, jne.. Myös käyttäjätietokantaa.",
+  "homepage": "http://taulukauppa.planeetta.com/api/",
+  "main": "main.js",
+  "repository": {
+    "type": "git",
+    "url": "git://github.com/Kaurakangas/Taulukauppa-API.git"
+  },
+  "contributors": [
+    {
+      "name": "Miro Nieminen",
+      "email": "leonarven@gmail.com",
+      "web": "http://github.miron.fi/"
+    }
+  ],
+  "dependencies": {
+    "swig": "^1.4.2"
+  }
 }
