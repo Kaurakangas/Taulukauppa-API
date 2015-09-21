@@ -2,14 +2,18 @@ console.log("System::START");
 
 var http    = require('http');
 var express = require('express');
+var fs      = require('fs');
 var app     = express();
 
 var api = require('./api.js');
+	api = api.config(fs.readFileSync("taulukauppa_configures.json", "utf8"));
 
-var PORT = 8080;
+var PORT = 8081;
 var HOST = "127.0.0.1";
 
 var APIException = api.APIException;
+
+
 
 app.get('/api', function(req, res) {
 	res.redirect('/api/doc');
@@ -28,6 +32,7 @@ app.all('/api/:target', function(req, res) {
 		if (typeof query.method !== "undefined") method = query.method;
 
 		response = api.call(method.toUpperCase(), target.toLowerCase(), query);
+		if (!response) throw new Exception("Empty response from API.call");
 		res.send({
 			"query"   : query,
 			"response": response
@@ -37,8 +42,7 @@ app.all('/api/:target', function(req, res) {
 			console.error("APIException while call:", e);
 			res.status(e.httpstatus || 500).send(e);
 		} else {
-			console.error("Unindetified error while API call");
-			console.error({"ERROR":"Unindetified exception", "Exception":e});
+			console.error("Unindetified error while API call", e);
 			res.status(e.httpstatus || 500).send({
 				ERROR: "Exception",
 				Exception: e
