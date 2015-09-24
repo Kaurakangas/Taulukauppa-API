@@ -1,6 +1,7 @@
 console.log("System::START");
 
 var http    = require('http');
+var https   = require('https');
 var express = require('express');
 var fs      = require('fs');
 var api     = require('./api.js');
@@ -16,6 +17,30 @@ console.log("System::Configured!");
 var PORT  = config.server.port || 8081;
 var HOST  = config.server.host || "127.0.0.1";
 var DEBUG = config.debug || false;
+var HTTPS = (function(cfg){
+	var opt = {};
+	if (typeof cfg === "undefined") return;
+
+	if (typeof cfg.key === "string")
+		opt.key = fs.readFileSync(cfg.key);
+	else return;
+
+	if (typeof cfg.cert === "string")
+		opt.cert = fs.readFileSync(cfg.cert);
+	else return;
+
+	if (typeof cfg.host === "string")
+		opt.host = cfg.host;
+	else opt.host = HOST;
+
+	if (typeof cfg.port === "string" || typeof cfg.port === "number")
+		opt.port = parseInt(cfg.port);
+	else return;
+
+	opt.server = https.createServer(opt, app);
+
+	return opt;
+})(config.server.https);
 
 console.debug = function( val ) {
 	if (DEBUG == false) return;
@@ -65,7 +90,21 @@ app.all('/api/:target', function(req, res) {
 	}	
 });
 
-if (!HOST) app.listen(PORT);
-else       app.listen(PORT, HOST);
+try {
+	app.listen(PORT, HOST);
+	console.log("System::HTTP Server running at "+HOST+":"+PORT);
+} catch(e) {
+	console.error("System::Error while starting to listen HTTP "+HOST+":"+PORT)
+	console.error(e);
+}
 
-console.log("System::Server running at "+(!HOST?"localhost":HOST)+":"+PORT);
+if (HTTPS) {
+	try {
+		HTTPS.server.listen(HTTPS.port, HTTPS.host);
+		console.log("System::SSL server running at "+HTTPS.host+":"+HTTPS.port);
+	} catch(e) {
+		console.error("System::Error while starting to listen HTTPS "+HOST+":"+PORT)
+		console.error(e);
+	}
+}
+
