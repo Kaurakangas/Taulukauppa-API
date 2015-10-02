@@ -80,17 +80,23 @@ app.all(config.apipath+'/:version/:target/(:uid)?', function(req, res) {
 	res.type('application/vnd.api+json');
 	try {
 
-		var response = api.getVersion(params.version).call(method, query, params.target, params.uid);
-		if (!response) throw new Error("Empty response from API.call");
+		api.getVersion(params.version).call(method, params.target, params.uid, query, function(err, response) {
+			if (!response) throw new Error("Empty response from API.call");
 
-		res.send({
-			"query"   : query,
-			"response": response
+			if (err) {
+				throw new APIException(err);
+			} else {
+				res.send({
+					"query"   : query,
+					"response": response
+				});
+			}
 		});
+
 	} catch(e) {
 		res.status(e.httpstatus || 500).send((function(e){
 			if (e instanceof APIException) {
-				console.error("APIException while call:", e);
+				console.error("APIException while call:", e.toString());
 			} else {
 				console.error("Unindetified error while API call", e);
 				e = { "ERROR": "Exception", "Exception": e, "stack": e.stack };

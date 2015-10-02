@@ -30,6 +30,7 @@ var db,
 
 
 function APIException(message) {
+	if (message instanceof APIException) return this=message;
 	this.message = message;
 	this.name = "APIException";
 	this.stack = new Error().stack;
@@ -55,20 +56,35 @@ function grantUserLevel(lvl, n) {
 function handleUserLevel(lvl) {
 	/* Joss taso enemmän kuin varmentautunut käyttäjä niin MYÖS varmentautunut käyttäjä */
 	if (lvl >= userlevels.VERIFIED)
-		grantUserLevel(lvl, userlevels.VERIFIED);
+		lvl = grantUserLevel(lvl, userlevels.VERIFIED);
 
 	/* Joss ADMIN tai DEVELOPER niin myös MODERATOR */
 	if (isOnUserLevel(lvl, userlevels.ADMIN) || isOnUserLevel(lvl, userlevels.DEVELOPER))
-		grantUserLevel(lvl, userlevels.MODERATOR);
+		lvl = grantUserLevel(lvl, userlevels.MODERATOR);
 
 	return lvl;
 }
 
-function getTokenMetaByToken(token) {
-	var query = db.query('SELECT * FROM tokens WHERE token = $1::varchar(32)', [ token ]);
-	query.on('row')
+function DBdoSelect(str, values, callback) {
+	var query = db.query({
+		'text'  : str,
+		'values': values
+	}, callback);
+//	query.on('end', callback);
+//	query.on('error', callback);
 	return query;
 }
+
+function getTokenMetaByToken(token, callback) {
+	return DBdoSelect('SELECT * FROM tokens, now() WHERE token = $1;', [ token ], function(err, result) {
+		if (err) return callback(err, result);
+		if (result.rowCount != 1) return callback(new Error('getTokenMetaByToken: query get invalid number of rows: '+result.rowCount), result);
+		var res = result.rows[0];
+		tokens[res.token] = res;
+		callback(null, res);
+	});
+}
+
 function getTokenPermissionsByToken(token) {
 	if (token in tokens) {
 		return tokens[token].permissions;
@@ -77,16 +93,12 @@ function getTokenPermissionsByToken(token) {
 	return 0;
 }
 
-var default_callback_func = function(response, err) {
-	callback
-};
-
 var target_funcs = {
 	"system": function(lvl, method, uid, query) {
 
 	},
 	"users": function(lvl, method, uid, query) {
-		if (uidlib.isValid(uid, '81')) {
+		if (uidlib.isValid(uid, uidlib.idOctets.USER)) {
 			/* Joss annettu uid on validi, niin pyydetään vain tietyn käyttäjän rivi */
 
 
@@ -105,7 +117,7 @@ var target_funcs = {
 	}
 };
 
-function Call(method, query, target, uid, callback) {
+function Call(method, target, uid, query, callback) {
 	console.log("API::Call()", method, target, query);
 	if (typeof method !== "string")
 		throw new APIException("Method must be String");
@@ -114,7 +126,7 @@ function Call(method, query, target, uid, callback) {
 
 	target = target.toLowerCase();
 	method = method.toUpperCase();
-	callback = (typeof callback === "function")?callback:default_callback_func;
+	callback = (typeof callback === "function")?callback:function(){};
 
 	var RunCall = target_funcs[target];
 	if (typeof RunCall !== "function")
@@ -127,16 +139,13 @@ function Call(method, query, target, uid, callback) {
 		var token = (typeof query.token === "undefined") ? false : query.token;
 		var lvl = token?getTokenPermissionsByToken(token):0;
 
-		console.log(getTokenMetaByToken("asd"));
-
-		return RunCall(lvl, method, uid, query);
+		return RunCall(lvl, method, uid, query, callback);
 	}
 
-	callback();
 
-
-	throw new APIException("Internal API error. (target="+target+",method="+method+")");
+//	throw new APIException("Internal API error. (target="+target+",method="+method+")");
 };
+
 
 Config = function(pg_db, configurations) {
 	db = pg_db;

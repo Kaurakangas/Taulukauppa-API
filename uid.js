@@ -29,6 +29,9 @@ var idOctets = {
 
 	'B0': {'desc':''},
 	'B1': {'desc':''},
+
+	USER : '81',
+
 	isValid: function(octet) {
 		var i = parseInt(octet, 16);
 		return i >= 128 && i < 191;
