@@ -13,15 +13,36 @@
   </head>
   <body>
 
-    <div class=".col-lg-8 .col-lg-offset-2">
+    <div id="main" class="col-lg-8 col-lg-offset-2">
+      <footer>
+        <h1>Sisällys</h1>        
+        <div>
+          <ul>
+            <li><a href="#users">/users</a></li>
+            <li><a href="#userdetails">/userdetails</a></li>
+          </ul>
+        </div>
+      </footer>
       <article>
-        <header>
-          <h1>Otsikko</h1>
-        </header>
+        <header><a id="users" href="#users"><h1>/users</h1></a></header>
         <section>
-          <p>Lorem Ipsum dolor sit amet</p>
-          <code>/api/users?token=abc123</code>
+          <p>Pyydetään joko tietoa käyttäjistä yleisesti, jolloin listataan kaikki käyttäjät, tai yksittäisestä käyttäjästä.</p>
+          <p>Joss on määritetty käyttäjän UID niin annetaan vain tämän tiedot <b>tokenin</b> käyttäjätason rajoissa.</p>
         </section>
+        <footer>
+          <code><b>/users</b>/<i>UID</i>?token=<i>TOKEN</i>&...</code>
+        </footer>
+      </article>
+      <article>
+        <header><a id="userdetails" href="#userdetails"><h1>/userdetails</h1></a></header>
+        <section>
+          <p>Kohde kolta voi pyytää käyttäjän yksityiskohtaisia henkilötietoja joita käyttäjä on antanut, <b>tokenin</b>-oikeuksien rajoissa.</p>
+          <p>Joss annetaan kohteeksi UID joka kohdennetaan yksittäiseen käyttäjätiliin, saadaan ykistyiskohtaiset tiedot yhdistettynä käyttäjätilin tietoihin. Sensijaan joss UID on käyttäjän henkilötietoihin kohdentuva niin saadaan vain ne. Muussa tapauksessa pyyntö on virheellinen.</p>
+          <p>Jokatapauksessa ulostulo parsitaan <b>tokenin</b>-attribuutin mukaisien oikeuksin mukaiseksi.</p>
+        </section>
+        <footer>
+          <code><b>/userdetails</b>/<i>UID</i>?token=<i>TOKEN</i>&...</code>
+        </footer>
       </article>
     </div>
 

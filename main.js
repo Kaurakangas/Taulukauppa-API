@@ -31,7 +31,7 @@ api.config(db, config);
 
 process.env.http_port = config.server.port || 8081;
 process.env.http_host = config.server.host || "127.0.0.1";
-var DEBUG = config.debug || false;
+process.env.debug = config.debug || false;
 var HTTPS = (function(cfg){
 	var opt = {};
 	if (typeof cfg === "undefined") return;
@@ -59,7 +59,7 @@ var HTTPS = (function(cfg){
 console.log("System::Configured!");
 
 console.debug = function( val ) {
-	if (DEBUG == false) return;
+	if (process.env.debug == false) return;
 	console.log( val );
 }
 
@@ -73,7 +73,9 @@ app.get(config.apipath+'/doc', function(req, res) {
 });
 
 app.all(config.apipath+'/:version/:target/(:uid)?', function(req, res) {
-	var query   = req.query,
+	console.log("API.Call()");
+	var tstime  = new Date().getTime();
+		query   = req.query,
 		params  = req.params,
 		method  = (typeof query.method === "undefined")?req.method:query.method;
 
@@ -81,24 +83,40 @@ app.all(config.apipath+'/:version/:target/(:uid)?', function(req, res) {
 	try {
 
 		api.getVersion(params.version).call(method, params.target, params.uid, query, function(err, response) {
-			if (!response) throw new Error("Empty response from API.call");
+			try {
+				if (!response) throw new Error("Empty response from API.Call");
 
-			if (err) {
-				throw new APIException(err);
-			} else {
-				res.send({
-					"query"   : query,
-					"response": response
-				});
-			}
+				if (err) {
+					throw new APIException(err);
+				} else {
+					if (process.env.debug)
+						res.send({
+							"query"   : query,
+							"response": response
+						});
+					else res.send(response);
+				}
+				console.log("API:Call in the end in "+(new Date().getTime() - tstime)+"ms");
+			} catch(e) {
+				res.status(e.httpstatus || 500).send((function(e){
+					if (e instanceof APIException) {
+						console.error("APIException while API.Call:", e.toString());
+					} else {
+						console.error("Unindetified error while API.Call", e);
+						e = { "ERROR": "Exception", "Exception": e, "stack": e.stack };
+					}
+					console.error(e.stack);
+					return e;
+				})(e));
+			}	
 		});
 
 	} catch(e) {
 		res.status(e.httpstatus || 500).send((function(e){
 			if (e instanceof APIException) {
-				console.error("APIException while call:", e.toString());
+				console.error("APIException while API.Call:", e.toString());
 			} else {
-				console.error("Unindetified error while API call", e);
+				console.error("Unindetified error while API.Call", e);
 				e = { "ERROR": "Exception", "Exception": e, "stack": e.stack };
 			}
 			console.error(e.stack);

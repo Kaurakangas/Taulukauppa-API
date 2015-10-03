@@ -30,7 +30,8 @@ var idOctets = {
 	'B0': {'desc':''},
 	'B1': {'desc':''},
 
-	USER : '81',
+	USERS   : '81',
+	DETAILS : '88',
 
 	isValid: function(octet) {
 		var i = parseInt(octet, 16);
@@ -40,12 +41,19 @@ var idOctets = {
 
 var child_process = require('child_process');
 
+function looksLikeUID(uid) {
+	if (typeof uid !== "string") return false;
+	if (uid.length != 16) return false;
+	return true;
+}
 
-function isValidIDOctet(uid, octet) {
+function isValidUIDOctet(uid, octet) {
+	console.log("isValidUIDOctet("+uid+","+octet+")");
 	return uid.substring(0,2) == octet;
 }
 
 function isValidUID(uid, octet) {
+	console.log("isValidUID("+uid+", "+octet+")");
 	if (typeof uid !== "string" || uid.length != 16)
 		throw new TypeError("uid must be 16 hex long string");
 
@@ -86,6 +94,8 @@ function checkUIDHash(uid) {
 }
 
 
-module.exports.idOctets = idOctets;
-module.exports.isValid  = isValidUID;
-module.exports.validate = validateUID;
+module.exports.looksLike    = looksLikeUID;
+module.exports.idOctets     = idOctets;
+module.exports.isValid      = isValidUID;
+module.exports.isValidOctet = isValidUIDOctet;
+module.exports.validate     = validateUID;

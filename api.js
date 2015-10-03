@@ -1,6 +1,6 @@
 var uidlib = require("./uid.js");
 
-var db,
+var db = { },
 	API = {},
 	userlevels = {
 	/* toteutetaan tavuun koko käyttäjäkirjo eli 2^8 mahdollisuutta */
@@ -27,6 +27,10 @@ var db,
 	},
 	tokens = {};
 
+function extend(obj, src) {
+	for (var key in src) if (src.hasOwnProperty(key)) obj[key] = src[key];
+	return obj;
+}
 
 
 function APIException(message) {
@@ -65,8 +69,27 @@ function handleUserLevel(lvl) {
 	return lvl;
 }
 
-function DBdoSelect(str, values, callback) {
-	var query = db.query({
+function getTokenMetaByToken(token, callback) {
+	if (token in tokens) return callback(null, tokens[token]);
+
+	return db.doSelect('SELECT * FROM tokens, now() WHERE token = $1;', [ token ], function(err, results) {
+		if (err) return callback(err, results);
+		if (results.rowCount != 1) return callback(new Error('getTokenMetaByToken: query get invalid number of rows: '+result.rowCount), result);
+		var res = results.rows[0];
+		tokens[res.token] = res;
+		callback(null, res);
+	});
+}
+
+function getTokenPermissionsByToken(token, callback) {
+	return getTokenMetaByToken(token, function(err, meta) {
+		callback(err, meta.permissions);
+	});
+}
+
+db.doSelect = function(str, values, callback) {
+	console.log("db.doSelect - ", str, values);
+	var query = db.client.query({
 		'text'  : str,
 		'values': values
 	}, callback);
@@ -75,45 +98,79 @@ function DBdoSelect(str, values, callback) {
 	return query;
 }
 
-function getTokenMetaByToken(token, callback) {
-	return DBdoSelect('SELECT * FROM tokens, now() WHERE token = $1;', [ token ], function(err, result) {
-		if (err) return callback(err, result);
-		if (result.rowCount != 1) return callback(new Error('getTokenMetaByToken: query get invalid number of rows: '+result.rowCount), result);
-		var res = result.rows[0];
-		tokens[res.token] = res;
-		callback(null, res);
-	});
-}
-
-function getTokenPermissionsByToken(token) {
-	if (token in tokens) {
-		return tokens[token].permissions;
+db.parse = {
+	select : {
+		users       : function(r, lvl) {
+			return r;
+		},
+		userdetails : function(r, lvl) {
+			return r;
+		}
 	}
-	var meta = getTokenMetaByToken(token);
-	return 0;
-}
+};
+
 
 var target_funcs = {
 	"system": function(lvl, method, uid, query) {
 
+//		toggledebug process.env.debug
+
 	},
-	"users": function(lvl, method, uid, query) {
-		if (uidlib.isValid(uid, uidlib.idOctets.USER)) {
-			/* Joss annettu uid on validi, niin pyydetään vain tietyn käyttäjän rivi */
+	"users": function(lvl, method, uid, query, callback) {
+		console.log(method+":users", uid, query);
+		switch (method) {
+			case "GET":
+				var querystr;
 
+				if (uid) {
+					if (uidlib.isValidOctet(uid, uidlib.idOctets.USERS))
+						query_s = ['SELECT * FROM users WHERE uid = $1::uid LIMIT 1;', [ uid ]];
+					else return callback(new Error('Invalid UID type'));
+				} else query_s = ['SELECT * FROM users;', null];
 
+				// Tehdään pyyntö käyttäjäkantaan, joko yhden tai jokaisen yksilön kohdalle
+				return db.doSelect(query_s[0], query_s[1], function(err, results) {
+					if (err) return callback(new APIException('SELECT/USERS Users not found (uid='+uid+')'), results);
+					if (results.length == 0) return callback(new APIException('User not found (uid='+uid+')'), results);
 
-		} else {
-			/* ... muulloin kaikki rivit */
-
-
-
+					results = db.parse.select.users(results.rows, lvl);
+					callback(null, results);
+				});
+			default:
+				return callback(new APIException('Invalid Method'));
 		}
 	},
-	"userDetails": function(lvl, method, uid, query) {
-		if (!uidlib.isValid(uid)) throw new Error('Not valid UID ('+uid+')');
+	"userdetails": function(lvl, method, uid, query, callback) {
+		console.log(method+":userdetails", uid, query);
+		if (!uidlib.looksLike(uid)) return callback(new TypeError("UID Must be set."))
+		switch (method) {
+			case "GET":
+				if (uidlib.isValidOctet(uid, uidlib.idOctets.DETAILS)) {
+					/* Tarkistetaanko viitataanko pelkkiin henkilötietoihin ... */
 
+					return db.doSelect('SELECT * FROM details WHERE uid = $1::uid LIMIT 1;', [ uid ], function(err, results) {
+						if (err) return callback(new APIException('SELECT/DETAILS Users not found (uid='+uid+')'), results);
+						if (results.length == 0) return callback(new error('Details not found (uid='+uid+')'), results);
+						results = db.parse.select.userdetails(results.rows, lvl);
+						callback(err, results);
+					});
+				} else if (uidlib.isValidOctet(uid, uidlib.idOctets.USERS)) {
+					/* ... vai käyttäjän tietoihin ne sisältäen */
 
+					return db.doSelect('SELECT * FROM users, details WHERE details_uid=details.uid AND users.uid=$1::uid LIMIT 1;', [ uid ], function(err, results) {
+						if (err) return callback(new APIException('SELECT/USERDETAILS Users not found (uid='+uid+')'), results);
+						if (results.length == 0) return callback(new error('Details not found (uid='+uid+')'), results);
+						results = db.parse.select.users(results.rows, lvl);
+						results = db.parse.select.userdetails(results, lvl);
+						callback(err, results);
+					});
+				} else {
+					/* Muulloin toimitaan käyttäjän oikeuksien rajoissa */
+					return callback(new Error('Not valid UID ('+uid+')'));
+				}
+			default:
+				return callback(new APIException('Invalid Method'));
+		}
 	}
 };
 
@@ -126,21 +183,22 @@ function Call(method, target, uid, query, callback) {
 
 	target = target.toLowerCase();
 	method = method.toUpperCase();
-	callback = (typeof callback === "function")?callback:function(){};
-
-	var RunCall = target_funcs[target];
-	if (typeof RunCall !== "function")
-		throw new APIException("Target cannot recognize. ("+target+")");
+	callback = (typeof callback === "function") ? callback : function(){};
 
 	if (typeof methods[method] === "undefined")
 		throw new APIException("Method cannot recognize. ("+method+")");
 
-	{
-		var token = (typeof query.token === "undefined") ? false : query.token;
-		var lvl = token?getTokenPermissionsByToken(token):0;
+	var token = (typeof query.token === "undefined") ? false : query.token,
+		lvl = token ? getTokenPermissionsByToken(token) : 0,
+		RunCall = (function(target){		
+			if (typeof target_funcs[target] !== "function")
+				throw new APIException("Target cannot recognize. ("+target+")");
 
-		return RunCall(lvl, method, uid, query, callback);
-	}
+			console.log("RunCall to '"+target+"' selected");
+			return target_funcs[target];
+		})(target);
+
+	return RunCall(lvl, method, uid, query, callback);
 
 
 //	throw new APIException("Internal API error. (target="+target+",method="+method+")");
@@ -148,7 +206,7 @@ function Call(method, target, uid, query, callback) {
 
 
 Config = function(pg_db, configurations) {
-	db = pg_db;
+	db.client = pg_db;
 	API.config = configurations;
 	return API;
 }
