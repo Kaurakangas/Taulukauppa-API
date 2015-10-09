@@ -1,33 +1,37 @@
-console.log("System::START");
-
 var http     = require('http');
 var https    = require('https');
 var express  = require('express');
 var fs       = require('fs');
-var postgres = require('pg');
 // #var passport = require('passport');
 
-var api      = require('./api.js');
-var secure   = require('./secure.js');
+var log      = require('./log.js'),
+    api      = require('./api.js'),
+    secure   = require('./secure.js'),
+    db       = require('./db.js');
 
-var app      = express();
-var config   = JSON.parse(fs.readFileSync("config.json", "utf8"));
-var db;
+log.system("START");
+
+var app       = express();
+var config    = JSON.parse(fs.readFileSync("config.json", "utf8"));
+var resource_lib  = require('./resources.js'),
+	resources     = resource_lib.parse(require('/taulukauppa/api_request_datatree.js')),
+	resource_tree = resource_lib.build_tree(resources);
+
 
 try {
-	config.postgresql.conString = "postgres://"+config.postgresql.username+":"+config.postgresql.password+"@"+config.postgresql.server+":"+config.postgresql.port+"/"+config.postgresql.masterDB;
-	db = new postgres.Client(config.postgresql.conString);
-	db.connect();
+	db.build(config.postgresql);
+	db.run();
 } catch(e) {
-	console.error("System::ERROR FATAL while connecting to database:", pg_con_string);
-	console.error(e);
+	log.fatal("while connecting to database", config.postgresql.conString);
+	log.error(e);
 	return;
 }
+
 config.apipath_root = config.apipath;
 config.apipath_n_version = (config.apipath==''?'':('/'+config.apipath))+"/"+config.apiversion;
 
 var APIException = api.APIException;
-api.config(db, config);
+api.config(db, resources, config);
 
 process.env.http_port = config.server.port || 8081;
 process.env.http_host = config.server.host || "127.0.0.1";
@@ -56,15 +60,10 @@ var HTTPS = (function(cfg){
 
 	return opt;
 })(config.server.https);
-console.log("System::Configured!");
-
-console.debug = function( val ) {
-	if (process.env.debug == false) return;
-	console.log( val );
-}
+log.system("Configured!");
 
 app.all("*", function(req, res, next) {
-	console.log("HTTP"+(req.secure?'S':'')+"::"+req.method.toUpperCase(), req.params, req.query);
+	log.out("HTTP"+(req.secure?'S':'')+"::"+req.method.toUpperCase(), req.params, req.query);
 	next();
 });
 
@@ -72,8 +71,40 @@ app.get(config.apipath+'/doc', function(req, res) {
 	res.sendFile(__dirname + "/public/documentation.html");
 });
 
+app.all(/^\/(v\d)(?:\/(.*))/, function(req, res, next) {
+	log.out("HTTP request", req["_raw"], req.params);
+	var request_version  = req.params[0],
+		request_resource = '/'+(req.params[1] || ''),
+		query   = req.query,
+		method  = (typeof query.method === "undefined")?req.method:query.method;
+	log.out("REGEXP CALL", request_version, request_resource);
+
+	try {
+		var res_req        = resource_lib.parse_request(request_resource),
+		    res_req_params = resource_lib.get_sql_query_params(resources, res_req);
+
+		api.getVersion(request_version).call(method, res_req_params, req.query, function(err, respond){
+			log.debug("running response lambda", err, respond);
+			if (!!err) {
+				log.error(err);
+				res.send(err);
+				return;
+			}
+
+			res.send(respond);
+
+
+
+
+		});
+	} catch (e){
+		log.fatal(e);
+		res.send(e);
+	}
+});
+
 app.all(config.apipath+'/:version/:target/(:uid)?', function(req, res) {
-	console.log("API.Call()");
+	log.out("API.Call()");
 	var tstime  = new Date().getTime();
 		query   = req.query,
 		params  = req.params,
@@ -91,21 +122,23 @@ app.all(config.apipath+'/:version/:target/(:uid)?', function(req, res) {
 				} else {
 					if (process.env.debug)
 						res.send({
-							"query"   : query,
-							"response": response
+							"resource"  : resource_lib.get_resource(resources, resource_lib.parse_request("/")),
+//							"resources" : resources,
+							"query"     : query,
+							"response"  : response
 						});
 					else res.send(response);
 				}
-				console.log("API:Call in the end in "+(new Date().getTime() - tstime)+"ms");
+				log.out("API:Call in the end in "+(new Date().getTime() - tstime)+"ms");
 			} catch(e) {
 				res.status(e.httpstatus || 500).send((function(e){
 					if (e instanceof APIException) {
-						console.error("APIException while API.Call:", e.toString());
+						log.error("APIException while API.Call:", e.toString());
 					} else {
-						console.error("Unindetified error while API.Call", e);
+						log.error("Unindetified error while API.Call", e);
 						e = { "ERROR": "Exception", "Exception": e, "stack": e.stack };
 					}
-					console.error(e.stack);
+					log.error(e.stack);
 					return e;
 				})(e));
 			}	
@@ -114,12 +147,12 @@ app.all(config.apipath+'/:version/:target/(:uid)?', function(req, res) {
 	} catch(e) {
 		res.status(e.httpstatus || 500).send((function(e){
 			if (e instanceof APIException) {
-				console.error("APIException while API.Call:", e.toString());
+				log.error("APIException while API.Call:", e.toString());
 			} else {
-				console.error("Unindetified error while API.Call", e);
+				log.error("Unindetified error while API.Call", e);
 				e = { "ERROR": "Exception", "Exception": e, "stack": e.stack };
 			}
-			console.error(e.stack);
+			log.error(e.stack);
 			return e;
 		})(e));
 	}	
@@ -127,19 +160,19 @@ app.all(config.apipath+'/:version/:target/(:uid)?', function(req, res) {
 
 try {
 	app.listen(process.env.http_port, process.env.http_host);
-	console.log("System::HTTP Server running at "+process.env.http_host+":"+process.env.http_port);
+	log.system("HTTP Server running at "+process.env.http_host+":"+process.env.http_port);
 } catch(e) {
-	console.error("System::Error while starting to listen HTTP "+process.env.http_host+":"+process.env.http_port)
-	console.error(e);
+	log.error("while starting to listen HTTP "+process.env.http_host+":"+process.env.http_port)
+	log.error(e);
 }
 
 if (HTTPS) {
 	try {
 		HTTPS.server.listen(HTTPS.port, HTTPS.host);
-		console.log("System::SSL server running at "+HTTPS.host+":"+HTTPS.port);
+		log.system("SSL server running at "+HTTPS.host+":"+HTTPS.port);
 	} catch(e) {
-		console.error("System::Error while starting to listen HTTPS "+HTTPS.host+":"+HTTPS.port)
-		console.error(e);
+		log.error("while starting to listen HTTPS "+HTTPS.host+":"+HTTPS.port)
+		log.error(e);
 	}
 }
 

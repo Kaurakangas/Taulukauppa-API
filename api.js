@@ -1,6 +1,7 @@
+var log    = require("./log.js");
 var uidlib = require("./uid.js");
 
-var db = { },
+var db = require("./db.js"),
 	API = {},
 	userlevels = {
 	/* toteutetaan tavuun koko käyttäjäkirjo eli 2^8 mahdollisuutta */
@@ -44,7 +45,7 @@ function APIException(message) {
 	this.toString = function() {
 		return this.name+": "+this.message;
 	}
-//	console.error("APIException created", this);
+//	log.error("APIException created", this);
 }
 
 /* binäärinen tarkistus onko summa arvolla N arvo N */
@@ -87,139 +88,33 @@ function getTokenPermissionsByToken(token, callback) {
 	});
 }
 
-db.doSelect = function(str, values, callback) {
-	console.log("db.doSelect - ", str, values);
-	var query = db.client.query({
-		'text'  : str,
-		'values': values
-	}, callback);
-//	query.on('end', callback);
-//	query.on('error', callback);
-	return query;
-}
 
-db.parse = {
-	select : {
-		users       : function(r, lvl) {
-			return r;
-		},
-		userdetails : function(r, lvl) {
-			return r;
+
+Config = function(pg_db, resources, configurations) {
+	db.client     = pg_db;
+	API.resources = resources;
+	API.config    = configurations;
+	API.versions  = {};
+	for(v in API.config.apiversions) {
+		try {
+			(API.versions[v] = require(API.config.apiversions[v])).config(pg_db, resources, configurations);
+		} catch(e) {
+			log.error("While initializing API version "+v+" from file "+API.config.apiversions[v]);
+			log.error(e);
 		}
 	}
-};
+	API.NO_CONFIG = false;
 
-
-var target_funcs = {
-	"system": function(lvl, method, uid, query) {
-
-//		toggledebug process.env.debug
-
-	},
-	"users": function(lvl, method, uid, query, callback) {
-		console.log(method+":users", uid, query);
-		switch (method) {
-			case "GET":
-				var querystr;
-
-				if (uid) {
-					if (uidlib.isValidOctet(uid, uidlib.idOctets.USERS))
-						query_s = ['SELECT * FROM users WHERE uid = $1::uid LIMIT 1;', [ uid ]];
-					else return callback(new Error('Invalid UID type'));
-				} else query_s = ['SELECT * FROM users;', null];
-
-				// Tehdään pyyntö käyttäjäkantaan, joko yhden tai jokaisen yksilön kohdalle
-				return db.doSelect(query_s[0], query_s[1], function(err, results) {
-					if (err) return callback(new APIException('SELECT/USERS Users not found (uid='+uid+')'), results);
-					if (results.length == 0) return callback(new APIException('User not found (uid='+uid+')'), results);
-
-					results = db.parse.select.users(results.rows, lvl);
-					callback(null, results);
-				});
-			default:
-				return callback(new APIException('Invalid Method'));
-		}
-	},
-	"userdetails": function(lvl, method, uid, query, callback) {
-		console.log(method+":userdetails", uid, query);
-		if (!uidlib.looksLike(uid)) return callback(new TypeError("UID Must be set."))
-		switch (method) {
-			case "GET":
-				if (uidlib.isValidOctet(uid, uidlib.idOctets.DETAILS)) {
-					/* Tarkistetaanko viitataanko pelkkiin henkilötietoihin ... */
-
-					return db.doSelect('SELECT * FROM details WHERE uid = $1::uid LIMIT 1;', [ uid ], function(err, results) {
-						if (err) return callback(new APIException('SELECT/DETAILS Users not found (uid='+uid+')'), results);
-						if (results.length == 0) return callback(new error('Details not found (uid='+uid+')'), results);
-						results = db.parse.select.userdetails(results.rows, lvl);
-						callback(err, results);
-					});
-				} else if (uidlib.isValidOctet(uid, uidlib.idOctets.USERS)) {
-					/* ... vai käyttäjän tietoihin ne sisältäen */
-
-					return db.doSelect('SELECT * FROM users, details WHERE details_uid=details.uid AND users.uid=$1::uid LIMIT 1;', [ uid ], function(err, results) {
-						if (err) return callback(new APIException('SELECT/USERDETAILS Users not found (uid='+uid+')'), results);
-						if (results.length == 0) return callback(new error('Details not found (uid='+uid+')'), results);
-						results = db.parse.select.users(results.rows, lvl);
-						results = db.parse.select.userdetails(results, lvl);
-						callback(err, results);
-					});
-				} else {
-					/* Muulloin toimitaan käyttäjän oikeuksien rajoissa */
-					return callback(new Error('Not valid UID ('+uid+')'));
-				}
-			default:
-				return callback(new APIException('Invalid Method'));
-		}
-	}
-};
-
-function Call(method, target, uid, query, callback) {
-	console.log("API::Call()", method, target, query);
-	if (typeof method !== "string")
-		throw new APIException("Method must be String");
-	if (typeof target !== "string")
-		throw new APIException("Target must be String");
-
-	target = target.toLowerCase();
-	method = method.toUpperCase();
-	callback = (typeof callback === "function") ? callback : function(){};
-
-	if (typeof methods[method] === "undefined")
-		throw new APIException("Method cannot recognize. ("+method+")");
-
-	var token = (typeof query.token === "undefined") ? false : query.token,
-		lvl = token ? getTokenPermissionsByToken(token) : 0,
-		RunCall = (function(target){		
-			if (typeof target_funcs[target] !== "function")
-				throw new APIException("Target cannot recognize. ("+target+")");
-
-			console.log("RunCall to '"+target+"' selected");
-			return target_funcs[target];
-		})(target);
-
-	return RunCall(lvl, method, uid, query, callback);
-
-
-//	throw new APIException("Internal API error. (target="+target+",method="+method+")");
-};
-
-
-Config = function(pg_db, configurations) {
-	db.client = pg_db;
-	API.config = configurations;
 	return API;
 }
 module.exports = API;
 module.exports.config = Config;
-module.exports.call = Call;
 module.exports.APIException = APIException;
 module.exports.getVersion = function(version) {
-	switch(version) {
-		case 'v0':
-			return this;
-		default:
-			throw new APIException("Version "+version+" is undefined.");
-	}
+	if (!!API.NO_CONFIG) throw new APIException("API not configured");
+	if (!!API.versions[version]) {
+		return API.versions[version];
+	} else throw new APIException("Version "+version+" is undefined.");
+
 	return undefined;
 };
