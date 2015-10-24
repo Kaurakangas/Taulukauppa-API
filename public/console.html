@@ -1,0 +1,129 @@
+<html>
+	<head>
+		<title>Artest API - konsoli</title>
+		<link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.5/css/bootstrap.min.css">
+
+		<style type="text/css">
+			#console {
+				margin-top: 42px;
+			}
+			#console > div.panel-heading {
+				width: 100%;
+				padding: 0px 15px;
+			}
+			#console > div.panel-heading:first-child {
+				padding-top: 10px;
+			}
+			#console > div.panel-heading:last-child {
+				padding-bottom: 10px;
+			}
+			#console pre {
+				margin: 0px;
+			}
+
+			#console-response .info { color: rgba(0,0,0,0.5); }
+			pre#response .string  { color: green; }
+			pre#response .number  { color: darkorange; }
+			pre#response .boolean { color: blue; }
+			pre#response .null    { color: magenta; }
+			pre#response .key     { color: red; }
+
+		</style>
+	</head>
+	<body>
+		<main class="col-sm-6 col-sm-offset-3">
+			<div id="console" class="panel panel-default">
+				<div class="input-group panel-heading">
+					<span class="input-group-addon" id="console-form-url">http://api.artest.net:8081/v1</span>
+					<input type="text" name="url" id="console-url" class="form-control" aria-describedby="console-form-url" placeholder="Request URL">
+					<span class="input-group-btn">
+						<button type="button" class="btn btn-primary" id="console-submit">Run API Call</button>
+					</span>
+				</div>
+				<div class="input-group panel-heading">
+					<span class="input-group-addon apikey" id="console-form-access">Access:</span>
+					<input type="text" name="apikey" id="console-apikey" class="form-control" aria-describedby="console-form-access" placeholder="Apikey">
+					<input type="text" name="token" id="console-token" class="form-control" aria-describedby="console-form-access" placeholder="Token">
+				</div>
+				<div class="input-group panel-heading">
+					<textarea name="request-body" id="console-request-body" class="form-control" placeholder="Request"></textarea>
+				</div>
+				<div class="panel-body" id="console-response">
+					<pre id="response-headers"><span class="info">API-request response headers</span></pre>
+					<pre id="response"><span class="info">API-request response</span></pre>
+				</div>
+			</div>
+		</main>
+
+		<script src="https://code.jquery.com/jquery-1.11.3.min.js"></script>
+		<script src="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.5/js/bootstrap.min.js"></script>
+		<script type="text/javascript">
+
+			function syntaxHighlight(json) {
+			    json = json.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+			    return json.replace(/("(\\u[a-zA-Z0-9]{4}|\\[^u]|[^\\"])*"(\s*:)?|\b(true|false|null)\b|-?\d+(?:\.\d*)?(?:[eE][+\-]?\d+)?)/g, function (match) {
+			        var cls = 'number';
+			        if (/^"/.test(match)) {
+			            if (/:$/.test(match)) { cls = 'key';
+			            } else {                cls = 'string'; }
+			        } else if (/true|false/.test(match)) { cls = 'boolean';
+			        } else if (/null/.test(match)) {       cls = 'null'; }
+
+			        return '<span class="' + cls + '">' + match + '</span>';
+			    });
+			}
+
+
+			function buildRequest() {
+				var burl = $("#console-form-url").text(),
+					rurl = $("#console input[name=url]").val(),
+					apikey = $("#console input[name=apikey]").val(),
+					token = $("#console input[name=token]").val(),
+					body = url = $("#console textarea[name=request-body]").val();
+
+				var url = "http://api.artest.net:8081/v1" + rurl + "?apikey="+apikey;
+				if (token.length > 0)
+					url = url + "&token="+token;
+
+				return {
+					"url"  : url,
+					"body" : body
+				};
+			}
+
+			function callRequest(url, method, body, elem) {
+				console.log("Running API Call, ",url,body);
+
+				var jqxhr = $.ajax(url, {
+					"data"    : body,
+					"method"  : method,
+					"dataType": "json"
+				});
+
+				jqxhr.done(function(res, status, jqxhr){
+					console.log("Response:", res, status, jqxhr);
+					var json = JSON.stringify(res, null, 2);
+					$("#response", elem).html(syntaxHighlight(json));
+					$("#response-headers", elem).html("Status Code: "+jqxhr.status+" "+jqxhr.statusText+"\n"+jqxhr.getAllResponseHeaders());
+				});
+
+				jqxhr.fail(function(jqxhr, status, err){
+					$("#response", elem).html("");
+					$("#response-headers", elem).html("Status Code: "+jqxhr.status+" "+jqxhr.statusText+"\n"+jqxhr.getAllResponseHeaders());
+				});
+			}
+
+			function runCall() {
+				req = buildRequest();
+				console.log(req);
+				location.hash = $("#console input[name=url]").val();
+				callRequest(req.url, "GET", req.body, "#console-response");
+			}
+			$(document).ready(function(){
+				$("#console input[name=url]").val(location.hash.substring(1));
+
+				$("#console-submit").click(runCall);
+			});
+		</script
+	</body>
+</html>
