@@ -25,6 +25,25 @@ function parse_resurce_columns_func(columns) {
 	return cs;
 }
 
+function parse_sort_func(sort_str) {
+	if (!sort_str || sort_str.length == 0) return [];
+	var s, o,
+	    sort = [],
+	    sorts = sort_str.split(",");
+
+	for(s in sorts) {
+		s = sorts[s];
+		o = "ASC";
+		switch(s[0]) {
+			case "-":  o = "DESC";
+			case "+":  s = s.substring(1);
+		}
+		sort.push([s,o]);
+	}
+
+	return sort;
+}
+
 function parse_sub_resources_func(resources) {
 	return parse_resources_func(resources);
 }
@@ -32,7 +51,8 @@ function parse_sub_resources_func(resources) {
 function parse_resource_func(target) {
 	var r = {
 			"type"              : "table",
-			"target_key_column" : "uid"
+			"target_key_column" : "uid",
+			"sort"              : []
 		};
 
 	if (typeof target                  !== "object" ||
@@ -46,6 +66,7 @@ function parse_resource_func(target) {
 	r.uid               = parse_resurce_columns_func(target.uid);
 	r.list              = parse_resurce_columns_func(target.list);
 	r.sub               = parse_sub_resources_func(target.sub);
+	r.sort              = parse_sort_func(target.sort);
 
 	if (r.uid.length === 0 && r.list.length === 0) return {};
 
@@ -94,21 +115,24 @@ function build_resource_tree_func(resources, base) {
 }
 
 function parse_resource_request_func(resource_request) {
-	var r, none_val = undefined,
+	var r, res_req, none_val = undefined,
 		regex = /^(?:\/([\d\w]{2,}))(?:\/([a-fA-F\d]{16})(?:\/([\d\w]{2,})(?:\/([a-fA-F\d]{16})(?:\/(.+))?)?)?)?/;
 
     r = resource_request.match(regex);
-    log.out(r);
 
-	return {
+	res_req = {
 		"res"        : r[1] || none_val,
 		"res_uid"    : r[2] || none_val,
 		"sub_res"    : r[3] || none_val,
 		"sub_res_uid": r[4] || none_val,
 		"end"        : r[5] || none_val,
-		"input"      : r.input,
+		"input"      : r.input,//(r.input.substring(r.input.length-1)=="/")?s.substring(0,s.length-1):r.input,
 		"toString"   : function() { return resource_request; }
 	};
+
+    log.debug("RECOURCES: Parsed resource request: ", res_req);
+
+	return res_req;
 };
 
 
@@ -123,6 +147,7 @@ function get_sql_query_params_func(resources, resource_request, token_lvl) {
 	var cols, rs = {
 		table : [],
 		where : [],
+		sort : res.sort,
 		cols  : {},
 		limit : undefined
 	};
@@ -197,7 +222,7 @@ function get_sql_query_params_func(resources, resource_request, token_lvl) {
 		}
 	} else rs.cols = cols;
 
-
+	/* DEBUG-vaiheen jälkeen ei tarvi rs'n kanssa pelleillä */
 	return rs["_query"] = (function(r){
 		var q = {
 			"cols"   : (function(r){
@@ -217,13 +242,24 @@ function get_sql_query_params_func(resources, resource_request, token_lvl) {
 				return ws;
 			})(r),
 
-			"limit" : r.limit
+			"limit" : r.limit,
+
+			"sort" : (function(r){
+				var rs = [];
+				for(s in r) {
+					if (typeof r[s] == "string") r[s] = [r[s], "ASC"];
+					rs.push(r[s][0]+" "+(!!r[s][1]?r[s][1]:"ASC"));
+				}
+				return rs;
+			})(r.sort)
 		};
 
-		q["_str"] = q.cols.join(" , ")
-			          +" FROM "+q.tables.join(" , ")
-			          +" WHERE "+q.where.join(" AND ")
-			          +((!!q.limit)?(" LIMIT "+q.limit):"");
+		q["_str"] = "SELECT "+q.cols.join(" , ")
+			       +" FROM "+q.tables.join(" , ")
+			       +((q.where.length>0)?(" WHERE "+q.where.join(" AND ")):"")
+			       +((q.sort.length>0)?(" ORDER BY "+q.sort.join(" , ")):"")
+			       +((!!q.limit)?(" LIMIT "+q.limit):"")+";";
+
 
 		return q;
 	})(rs);
@@ -235,4 +271,5 @@ function get_sql_query_params_func(resources, resource_request, token_lvl) {
 module.exports.parse      = parse_resources_func;
 module.exports.build_tree = build_resource_tree_func;
 module.exports.parse_request = parse_resource_request_func;
+module.exports.parse_sort = parse_sort_func;
 module.exports.get_sql_query_params = get_sql_query_params_func;

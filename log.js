@@ -7,12 +7,12 @@ var get_ctime = function()  { return new Date().getTime(); },
 
 var p_out = function(func, a, btxt) {
 	var time_str_ws = 11,
-		time_str = (get_dtime()/1000)+"";
+		time_str = (get_dtime()/1000).toFixed(3);
 
 	a = a || {};
 
 	if (time_str.length < time_str_ws) 
-		time_str = (new Array(time_str_ws-1-time_str.length).join(" ")) + time_str;
+		time_str = (new Array(time_str_ws-1-time_str.length).join("-")) + time_str;
 
 	btxt = time_str + ((!!btxt)?(" :: "+btxt):"");
 	switch(a.length) {
@@ -35,3 +35,30 @@ module.exports.error  = function() { return p_out(console.error, arguments, "ERR
 module.exports.fatal  = function() { return p_out(console.error, arguments, "FATAL ERROR "+get_n_line()); }
 
 module.exports.at     = function() { return p_out(console.log,   arguments, get_n_line()); }
+
+module.exports.stacktrace   = function() { p_out(console.error, "STACKTRACE", new Error().stack); }
+
+module.exports.e_stacktrace = function(e) { p_out(console.error, "ERROR STACKTRACE", e.stack); }
+module.exports.e_error = function(e) { var self=this; self.error(e); self.e_stacktrace(e); }
+module.exports.e_fatal = function(e) { var self=this; self.fatal(e); self.e_stacktrace(e); }
+
+module.exports.INIT = function(){
+	var str = "   STARTING SERVER AT "+new Date()+"   ",
+		c = "#";
+
+	console.log(Array(str.length+3).join(c));
+	console.log(c+str+c);
+	console.log(Array(str.length+3).join(c));
+}
+
+
+var __timers = {};
+module.exports.timer = {
+	start : function(i) {
+		__timers[i || 0] = process.hrtime();
+	},
+	stop : function(i) {
+		var d = process.hrtime(__timers[i || 0]);
+		return d[0] + d[1] * 1e-9;
+	}
+};

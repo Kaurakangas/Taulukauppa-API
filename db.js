@@ -1,3 +1,4 @@
+var log      = require("./log.js");
 var postgres = require('pg');
 
 module.exports = {
@@ -5,11 +6,16 @@ module.exports = {
 	client : undefined,
 
 	doSelect : function(str, values, callback) {
-		console.log("db.doSelect - ", str, values);
-		var query = this.client.query({
-			'text'  : str,
-			'values': values
-		}, callback);
+		log.out("db.doSelect - ", str, values);
+		var query = null;
+		try {
+			query = this.client.query({
+				'text'  : str,
+				'values': values
+			}, callback);
+		} catch(e) {
+			log.e_error(e);
+		}
 		return query;
 	},
 
@@ -19,5 +25,6 @@ module.exports = {
 	},
 	run : function() {
 		this.client.connect();
+		log.system("Database running");
 	}
 };

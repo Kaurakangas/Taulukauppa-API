@@ -88,18 +88,6 @@ function getTokenPermissionsByToken(token, callback) {
 	});
 }
 
-db.parse = {
-	select : {
-		users       : function(r, lvl) {
-			return r;
-		},
-		userdetails : function(r, lvl) {
-			return r;
-		}
-	}
-};
-
-
 var target_funcs = {
 	"system": function(lvl, method, uid, query) {
 
@@ -197,7 +185,7 @@ function Call(method, target, uid, query, callback) {
 
 
 Config = function(pg_db, resources, configurations) {
-	db.client     = pg_db;
+	db            = pg_db;
 	API.resources = resources;
 	API.config    = configurations;
 	API.NO_CONFIG = false;

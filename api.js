@@ -1,8 +1,8 @@
 var log    = require("./log.js");
 var uidlib = require("./uid.js");
+var jsonapi_lib = require("./resource_jsonapi.js");
 
-var db = require("./db.js"),
-	API = {},
+var API = {},
 	userlevels = {
 	/* toteutetaan tavuun koko käyttäjäkirjo eli 2^8 mahdollisuutta */
 		UNREGISTERED: 0,	// 0	00000000
@@ -70,18 +70,6 @@ function handleUserLevel(lvl) {
 	return lvl;
 }
 
-function getTokenMetaByToken(token, callback) {
-	if (token in tokens) return callback(null, tokens[token]);
-
-	return db.doSelect('SELECT * FROM tokens, now() WHERE token = $1;', [ token ], function(err, results) {
-		if (err) return callback(err, results);
-		if (results.rowCount != 1) return callback(new Error('getTokenMetaByToken: query get invalid number of rows: '+result.rowCount), result);
-		var res = results.rows[0];
-		tokens[res.token] = res;
-		callback(null, res);
-	});
-}
-
 function getTokenPermissionsByToken(token, callback) {
 	return getTokenMetaByToken(token, function(err, meta) {
 		callback(err, meta.permissions);
@@ -90,17 +78,18 @@ function getTokenPermissionsByToken(token, callback) {
 
 
 
-Config = function(pg_db, resources, configurations) {
-	db.client     = pg_db;
+Config = function(resources, configurations) {
 	API.resources = resources;
 	API.config    = configurations;
 	API.versions  = {};
-	for(v in API.config.apiversions) {
+	for(version in API.config.apiversions) {
+		log.debug("Handling API version "+version, API.config.apiversions[version]);
 		try {
-			(API.versions[v] = require(API.config.apiversions[v])).config(pg_db, resources, configurations);
+			API.versions[version] = require(API.config.apiversions[version]);
+			API.versions[version].config(resources, configurations);
 		} catch(e) {
-			log.error("While initializing API version "+v+" from file "+API.config.apiversions[v]);
-			log.error(e);
+			log.error("Error while initializing API version "+version+" from file "+API.config.apiversions[version], e);
+			log.stacktrace(e);
 		}
 	}
 	API.NO_CONFIG = false;
@@ -112,9 +101,13 @@ module.exports.config = Config;
 module.exports.APIException = APIException;
 module.exports.getVersion = function(version) {
 	if (!!API.NO_CONFIG) throw new APIException("API not configured");
+	log.debug("Selecting API version "+version);
 	if (!!API.versions[version]) {
 		return API.versions[version];
 	} else throw new APIException("Version "+version+" is undefined.");
 
 	return undefined;
 };
+
+module.exports.jsonapi_set_resources = jsonapi_lib.jsonapi_set_resources_func;
+module.exports.jsonapi_gen = jsonapi_lib.jsonapi_gen_func;
