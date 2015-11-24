@@ -144,6 +144,8 @@ function parse_resource_request_func(resource_request) {
 function get_sql_query_params_func(resources, resource_request, token_lvl) {
 	var req = resource_request;
 	var res = resources[req.res];
+	console.log(res);
+	return;
 	var cols, rs = {
 		table : [],
 		where : [],

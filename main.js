@@ -8,7 +8,12 @@ var log      = require('./log.js'),
     db       = require('./db.js'),
     resource_lib  = require('./resources.js');
 
+
+
+/* -------------- Ladattu kirjastot, aletaan valmistella käytettävää tietoa ------------ */
 log.timer.start('load');
+
+
 
 var APIException = api.APIException;
 
@@ -40,9 +45,13 @@ try {
 	return;
 }
 
+
+
 log.system("Loaded! Took "+log.timer.stop('load')+"ns");
 /* -------------- Resurssit ladattu, viimeistellään ja käsitellään ne ------------ */
 log.timer.start('init');
+
+
 
 api.jsonapi_set_resources(resources);
 api.config(resources, config);
@@ -53,9 +62,8 @@ process.http = {
 	port : config.server.port	
 };
 process.https = (function(cfg){
-	if (!!!cfg || (!!cfg.use && !cfg.use)) return;
-
-	if (!(typeof cfg.key  === "string" &&
+	if (!!!cfg || (!!cfg.use && !cfg.use) ||
+		!(typeof cfg.key  === "string" &&
 		  typeof cfg.cert === "string" &&
 		 (typeof cfg.port === "string" || typeof cfg.port === "number"))) return;
 
@@ -77,8 +85,10 @@ process.https = (function(cfg){
 })(config.server.https) || undefined;
 
 
+
 log.system("Configured! Took "+log.timer.stop('init')+"ns");
 /* -------------- Resurssit valmiina, voidaan alkaa toiminta ------------ */
+
 
 
 app.all("*", function(req, res, next) {

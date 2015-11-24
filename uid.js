@@ -5,14 +5,14 @@
 
 var idOctets = {
 	'80': {'desc':''},
-	'81': {'desc':''},
-	'82': {'desc':''},
-	'83': {'desc':''},
-	'84': {'desc':''},
+	USERS   : '81', '81': {'desc':''},
+	OEUVRES : '82', '82': {'desc':''},
+	ARTISTS : '83', '83': {'desc':''},
+	METHODS : '84', '84': {'desc':''},
 	'85': {'desc':''},
 	'86': {'desc':''},
 	'87': {'desc':''},
-	'88': {'desc':''},
+	DETAILS : '88', '88': {'desc':''},
 
 	'8A': {'desc':''},
 	'8B': {'desc':''},
@@ -30,8 +30,6 @@ var idOctets = {
 	'B0': {'desc':''},
 	'B1': {'desc':''},
 
-	USERS   : '81',
-	DETAILS : '88',
 
 	isValid: function(octet) {
 		var i = parseInt(octet, 16);
@@ -96,6 +94,7 @@ function checkUIDHash(uid) {
 
 module.exports.looksLike    = looksLikeUID;
 module.exports.idOctets     = idOctets;
+module.exports.OCT          = idOctets;
 module.exports.isValid      = isValidUID;
 module.exports.isValidOctet = isValidUIDOctet;
 module.exports.validate     = validateUID;
